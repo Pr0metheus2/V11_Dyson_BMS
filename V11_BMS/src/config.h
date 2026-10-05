@@ -9,6 +9,9 @@
 #ifndef CONFIG_H_
 #define CONFIG_H_
 
+// firmware version reported by the Dyson protocol
+#define FIRMWARE_VERSION_STR                "V11-BMS-1.0.1"
+
 // pin assignments
 #define LED_ERR_RIGHT                       PIN_PA00
 #define LED_ERR_LEFT                        PIN_PA19

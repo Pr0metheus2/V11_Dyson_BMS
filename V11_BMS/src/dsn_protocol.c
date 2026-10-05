@@ -127,7 +127,8 @@
 
 // firmware version string (22 bytes, queried by pair 0x0306)
 #define FW_VERSION_STR_LEN      22
-static const char fw_version_str[FW_VERSION_STR_LEN] = "V11-BMS-1.0";
+static const char fw_version_str[FW_VERSION_STR_LEN] = FIRMWARE_VERSION_STR;
+_Static_assert(sizeof(FIRMWARE_VERSION_STR) <= sizeof(fw_version_str), "Firmware version string is too long");
 
 // motor speed thresholds from trigger messages
 #define MOTOR_SPEED_OFF         0

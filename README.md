@@ -346,10 +346,11 @@ required. On common ST-Link/V2 dongles, pins labelled `3.3V` or `5V` are often
 power outputs: leave them disconnected and let the battery power itself.
 Wake the battery immediately before connecting so the MCU has power.
 
-First build the current firmware using the [Windows](#windows-powershell) or
+Build the current firmware using the [Windows](#windows-powershell) or
 [Linux/WSL](#command-line-build-linux--posix-shell) instructions and check that
-`samd20_firmware.elf` exists in the selected build directory. The commands below
-use the PowerShell build directory. For the Linux/WSL instructions above, replace
+`samd20_firmware.elf` exists in the selected build directory, or use a prebuilt
+release HEX as described below. The first programming example uses the
+PowerShell build directory. For the Linux/WSL instructions above, replace
 `build-stlink/` with `build-linux/` in the programming command; for plain
 `make all`, use `build/`.
 
@@ -361,27 +362,52 @@ cd V11_BMS
 openocd --version
 
 # Test the SWD connection; halts the MCU without erasing flash
-openocd -f openocd_samd20_stlink.cfg -c "adapter speed 100" -c "init; reset halt; targets; exit"
+openocd -f openocd_samd20_stlink.cfg -c "adapter speed 100" -c 'init; reset halt; echo [targets]; shutdown'
 
-# Program, verify, and reset an already unlocked device
-openocd -f openocd_samd20_stlink.cfg -c "adapter speed 100" -c "program build-stlink/samd20_firmware.elf verify reset exit"
+# Program, verify, software-reset, and run an already unlocked device
+openocd -f openocd_samd20_stlink.cfg -c "adapter speed 100" -c "reset_config none" -c "cortex_m reset_config sysresetreq" -c 'program build-stlink/samd20_firmware.elf verify; reset halt; cortex_m vector_catch none; resume; sleep 500; poll; echo [targets]; shutdown'
 ```
 
 Use these explicit commands for ST-Link: the project's `make flash` target
 currently selects the J-Link configuration.
 
-The successful programming log ends with:
+Look for successful programming and verification in the log:
 
 ```text
 ** Programming Finished **
 ** Verify Started **
 ** Verified OK **
-** Resetting Target **
-shutdown command invoked
 ```
+
+The final target table should show `samd20.cpu` as `running`, followed by
+`shutdown command invoked`.
 
 `Verified OK` confirms that flash matches the image. It does not validate BMS
 operation; check the UART diagnostics and battery behaviour after programming.
+
+#### Flashing a release HEX and starting the firmware
+
+From `V11_BMS`, use this command for the
+[v1.0.1 release](https://github.com/vladislav1983/V11_Dyson_BMS/releases/tag/v1.0.1).
+Place the downloaded `samd20_firmware.hex` in `build-release-1.0.1/`, or adjust
+the image path to its actual location:
+
+```powershell
+openocd -f openocd_samd20_stlink.cfg -c "adapter speed 100" -c "reset_config none" -c "cortex_m reset_config sysresetreq" -c 'program build-release-1.0.1/samd20_firmware.hex verify; reset halt; cortex_m vector_catch none; resume; sleep 500; poll; echo [targets]; shutdown'
+```
+
+This uses a software system reset through SWD, not the NRST wire. The
+`SYSRESETREQ` reset followed by explicit `resume` has been confirmed to start
+the firmware with ST-Link still attached on the setup listed above. The combined
+programming commands use this same reset/run sequence. An NRST-based sequence
+on that setup could leave the CPU halted in RAM after verification.
+
+`reset halt` restarts the CPU at the firmware reset handler, then
+`cortex_m vector_catch none` disables debug vector catches and `resume` starts
+execution. The final 500 ms wait and `poll` allow checking the target state.
+Do not add `exit` to `program`: OpenOCD must remain open for these subsequent
+commands and close only at `shutdown`. See the
+[OpenOCD Cortex-M reset documentation](https://openocd.org/doc/html/Architecture-and-Core-Commands.html).
 
 Only if the device is still protected, a full erase/unlock is required before
 programming. **This permanently removes the original firmware and erases saved
